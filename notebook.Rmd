@@ -1,0 +1,323 @@
+---
+title: "Covid-19 and Character Strengths"
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+
+# Description:
+
+The Covid-19 pandemic obliged people around the world to stay home and self-isolate, with a number of negative psychological consequences. This study focuses on the protective role of character strengths in sustaining mental health and self-efficacy during lock down. Data were collected from 944 Italian respondents (mean age = 37.24 years, SD = 14.50) by means of an online survey investigating character strengths, psychological distress and Covid-19 related self-efficacy one month after lock down began.
+
+1.  Perform Principle component analysis and compare your results with the result of the study.
+2.  Perform cluster analysis using the four strengths factors extracted, namely transcendence, interpersonal, openness and restraint and validate your analysis.
+3.  Perform Multivariate regression for The three dependent measures:
+
+1.  DASS*21 (Depression Anxiety and Stress Scale)*
+2.  *GHQ*12 (General Health Questionnaire)
+3.  SEC (Self-efficacy for Covid-19)
+
+## Six demographic variables added in the analysis:
+
+1.  Age
+
+2.  Gender
+
+3.  Work (representing the perceived work change subsequent to lock down)\
+    Student (being a student or not)
+
+4.  Day (how many days passed when the participant responded since the day the survey was opened)
+
+# Imports
+
+```{r}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(GGally)
+library(biotools)
+library(MVN)
+library(MASS)
+library(MVTests)
+library(car)
+```
+
+```{r}
+DB <- read_excel("DB.xlsx")
+DB
+```
+
+```{r}
+sum(is.na(DB))
+```
+
+The data set is large with 33 explanatory variables which suggests that using a dimensionality reduction techniques would be appropriate to proceed with the analysis.
+
+This could be achieved through Principal Component or Factor Analysis. At first both approaches might seem similar; however, there are a lot differences between both methods.
+
+1.  Principal Components are a linear function of the Eigenvectors and the variables: $$C=E^T.X$$ Meanwhile in Factor Analysis the Variables are a linear function of Factors and Loadings:$$X=LF$$
+
+2.  Factor Scores are then extracted using different method one of which is scaling the principal components by root of he eigenvalues: $C_i/\sqrt{\lambda_i}$
+
+3.  Principal Component Analysis uses Spectral Decomposition where$\Sigma = P\Lambda.P^T$ where P is a matrix of Normalized eigenvectors, and$\Lambda$ is a diagonal of eigenvalues. On the other hand, in order to perform Factor Analysis and extracted Loadings Covariance matrix is decomposed using Cholesky Decomposition: $\Sigma=L.L^T$
+
+4.  Unlike PCA where the component or indices obtained are difficult to interpret, Factor scores are meaningful.
+
+5.  There are other differences between both approaches such as the assumptions underlying each method vary greatly.
+
+    # Factor Analysis
+
+    Deciding on the appropriate number of Factors is somewhat subjective. If we have a previous background or an initial hypothesis about the number of Factor\\latent variables, we may start with an informed guess. However, if we do not have a clue about the number of factors to estimate, try using either of these approaches that are based of the principal components analysis method.
+
+    1.  Kaiser-Guttman rule of thumb which retains eigenvalues greater than 1
+    2.  Retain eigenvalues that explain at least 80% of the variation. In some Social Sciences context 50% is enough.
+    3.  Scree plot.
+
+    It is better to use the Correlation Matrix instead of Covariance Matrix to avoid different scales. but it wouldn't matter in our case.
+
+```{r}
+#Eigen values correlation matrix
+pca = prcomp(DB[,-c(1:3,4,5,6, 7, 8,9)], scale = TRUE)
+```
+
+Using the scree plot method.
+
+```{r}
+Eigenvalues = pca$sdev ^ 2
+
+qplot(c(1:24), Eigenvalues) + 
+  geom_line() + 
+  xlab("Principal Components") + 
+  ggtitle("Scree Plot")
+```
+
+The scree plot method is somewhat subjective, some would say retain 1 components others would say 4. However, it comes down to the desired explained variation.
+
+```{r}
+summary(pca)
+```
+
+The first factor explain about 32.41% of the variation. Meanwhile retaining 4 factors explains 55.2%
+
+```{r}
+fa = factanal(DB[,-c(1:3,4,5,6, 7, 8,9)], factors = 4, rotation = 'none')
+fa$loadings
+```
+
+Sadly, Loadings overlap quite heavily which poses challenges and difficulties in interpreting the latent Factors, suggesting a rotation is, in fact, needed. Hopefully, relationships between factors and variables become more clearer.
+
+Applying Varimax rotation
+
+```{r}
+fa = factanal(DB[,-c(1:3,4,5,6, 7, 8,9)], factors = 4,
+              scores = "Bartlett", rotation = 'promax')
+fa$loadings
+```
+
+By examining the loadings above one can see that Fairness, , Humility, Leadership, Teamwork load on Factor1. This suggests that Factor1 might represent **Social behavior.** Factor 2 could possibly represents **Transcendence** as variables such as Gratitude, Hope, Perseverance, Spirituality, Zest load on it. Meanwhile, Factor3 represents **Openness.** Bravery, Creativity, Curiosity load heavily on it. Variables such as Judgment, Perspective, Prudence load positively on Factor4. This implies that Factor4 might represent some sort of self-control or **Restraint**
+
+#### 
+Communalities
+
+communalities represent the portion of the variability explained by the Factors. Similar to R-squared.
+
+```{r}
+l2 = fa$loadings^2
+h2 = data.frame(apply(l2,1,sum))
+colnames(h2) = c("Communalities")
+h2
+```
+
+-   20% of the variation of the variable Appreciation of beauty is explained by the factors.
+
+-   86% of the variation in the variable fairness is explained by the factors
+
+```{r}
+colnames(fa$scores) = c('Social behavior', 'Transcendence', 'Openness', 'Restraint')
+factors = data.frame(fa$scores)
+factors
+```
+
+```{r}
+data.frame(cor(factors))
+```
+
+fortunately, the oblique rotation did not affect he correlations between the factors.
+
+we need them uncorrelated. always remmeber the Multicollinearity problem
+
+# Cluster Analysis
+
+Perform Cluster analysis using K-means.
+
+How many groups\\Cluster should the researcher choose? What is the goal of the research? Should he choose 2, and cluster the data into groups of mentally healthy people or should he choose 3 or even 4? What is the initial hypothesis or guess?
+
+One approach is to graphically decide it through plotting the Factors Scores or principal components of some observation.
+
+```{r}
+barplot(pca$x[1:20,1])
+```
+
+some observation have positive scores while other negative which suggests that 2 cluster. however, one could observe that there are extreme positive, negative values and moderate values in bewteen which suggests 3 clusters.
+
+Proceeding with only 3 clusters.
+
+```{r}
+set.seed(1)
+results = kmeans(factors, centers = 2)
+means = results$centers
+t(means)
+```
+
+```{r}
+ggplot(factors, aes(Transcendence, Openness)) +
+  geom_point(aes(colour = factor(results$cluster))) +
+  geom_point(data = data.frame(means[,1:2]),
+             aes(means[,1], means[,2]),
+             shape = 'X',
+             size = 3)
+```
+
+```{r}
+factors = data.frame(factors, results$cluster)
+```
+
+## Evaluating K-Means using Discriminant Analysis
+
+Before performing Discriminant Analysis check the assumptions first
+
+1.  Multivariate Normal
+
+2.  Equality of Covariance structure of both groups.
+
+    $H_o: \Sigma_1 = \Sigma_2 = \Sigma_3$
+
+    $H_1:\Sigma_1 \neq \Sigma_2 \neq \Sigma_3$
+
+3.  Testing unequal mean vector across samples.
+
+    $H_o:\mu_1 = \mu_2 = \mu_3$
+
+    $H_1:\mu_1 \neq \mu_2 \neq \mu_2$
+
+    Testing the equality of the covariance structure of both groups is crucial. If the the covariances are not equal, the researcher should implement Quadratic Discriminant Analysis. In addition to this if the mean vectors are not different (3rd Assumption) and we fail to reject the null hypothesis, implementing Discriminant analysis would be meaningless.
+
+```{r}
+boxM(factors[,c(1:4)], factors$results.cluster)
+```
+
+Reject the null Hypothesis and the covariances between the three samples is different hence, use Quadratic discriminant Analysis.
+
+```{r}
+TwoSamplesHT2(factors[,c(1:4)], factors$results.cluster)$p.value
+```
+
+p value is less than 0.05, thus, reject the null hypothesis and the mean vector is different across the samples.
+
+```{r}
+factors
+```
+
+### Quadratic Discriminant Analysis
+
+Quadratic Discriminant with Leave one out cross-validation.
+
+```{r}
+qda = qda(results.cluster ~ ., data = factors, CV = T)
+yhat = qda$class
+ytrue = factors$results.cluster
+table(ytrue, yhat, dnn = c('Actual Group','Predicted Group'))
+```
+
+Accuracy for group 1: 353/374 = 0.94 = 94.3%
+
+Accuracy for group 2: 94.9%
+
+Accuracy for group 3: 95.2%
+
+# Multivariate regression
+
+Multivariate regression is quite similar to the univariate case the coefficient are estimated using the same algebraic function however, $Y$ in this case is matrix. $\beta=(X^TX)^{-1} X^T.Y$. The estimated coefficients are even the same if we estimated them one by one using the univariate case, however, the null hypothesis would change slightly. one would say that "The variable X1 is not jointly significant on the three response variables".
+
+Include the demography variables alongside the factors extracted and treat them as explanatory variables.
+
+```{r}
+df = cbind(factors[,-5], DB[,c(1:9)])
+df
+```
+
+Check Multivariate normal for dependent Variables.
+
+```{r}
+#checking normaility of dependent varaibles 
+mv = mvn(df[,c("DASS_21", "GHQ_12", "SEC")], mvnTest = 'mardia', univariatePlot= 'histogram')
+```
+
+```{r}
+mv$multivariateNormality
+```
+
+Multivariate normality of the dependent variables is rejected and the DASS_21 need transformation as it is skewed.
+
+```{r}
+# reencode the variable to be able to take a logarithmic transformation
+df$DASS_21 = df$DASS_21 + 1
+df <- data.frame(df)  
+mlm1 = lm(cbind(log(DASS_21), GHQ_12, SEC) ~ .,data = df) 
+summary(mlm1)
+```
+
+By examining the 3 equations above some variables appear to be significant. Transcendence for instance is significant across all 3 equations, however, a variable such as openness appear to be significant only in the last 2 equations. Multivariate techniques such as MANOVA helps us address this problem through testing jointly whether a certain predictor is significant over the the 3 Response variables.
+
+```{r}
+
+Anova(mlm1)
+```
+
+The variables that appear to be jointly significant are our 4 factors and Age, Gender, Work, Student.
+
+We could definitely fit another model hat includes the significant variables only and compare it with the initial one.
+
+```{r}
+mlm2 = lm(cbind(log(DASS_21), GHQ_12, SEC) ~ .,data = df[,-c(9,10)]) 
+anova(mlm1, mlm2)
+```
+
+Reject the null hypothesis with 5% significance level. The second model fits the data better than the first one
+
+The following models explain the most
+variations in our response ,given the data at hand .
+
+1.  SEC \~ Social.Behavior + Openness +Restraint +Transcendence + Age + Gender + Work + Student
+2.  GHQ_12 \~ Social.Behavior + Openness + Restraint + Transcendence + Age + Gender + Work + Student
+3.  DASS_21 \~ Social.Behavior + Openness + Restraint + Transcendence + Age + Gender + Work + Student
+
+# Findings
+
+Variables such as *Creativity*, *Curiosity*,
+and *Bravery* are associated to strength factor Openness. Meanwhile,
+variables such as the *Zest*, *Hope,* and *Gratitude* contribute
+to strength factor Transcendence. 
+
+Similar to the original paper, Transcendence had a
+significant inverse association with psychological distress and anxiety
+(DASS_21), and a positive relation with self-efficacy (GHQ). Openness factor
+exhibited a direct relation with psychological distress.
+
+K-means was then applied to cluster people who are prone
+to or had bad mental health during lockdown. The first group who were more
+open; *creative and curious individuals, were associated with Depression and
+anxiety as evidenced by the regression analysis were classified as bad mental
+health during lockdown.* Transcendence had a negative association with depression
+and self-efficacy, thus people with *hope, gratitude and zest* were
+classified with good mental health during lockdown.
+
+# References:
+
+1.  Richard A. Johnson, Dean W. Wichern. Applied Multivariate Statistical Analysis.(2007).Pearson.
+2.  <https://www.geo.fu-berlin.de/en/v/soga/Geodata-analysis/factor-analysis/A-simple-example-of-FA/index.html#:~:text=In%20the%20R%20software%20factor,specified%20by%20the%20argument%20factors%20.>
+3.  <https://positivepsychology.com/self-transcendence/#psychology-self-transcendence>
+4.  [https://pages.cms.hu-berlin.de/EOL/gcg_quantitative-methods/Lab11_LDA_Model-assessment.html#Confusion_matrix\_(test_error)](https://pages.cms.hu-berlin.de/EOL/gcg_quantitative-methods/Lab11_LDA_Model-assessment.html#Confusion_matrix_(test_error))
+5.  <https://data.library.virginia.edu/getting-started-with-multivariate-multiple-regression/#:~:text=Performing%20multivariate%20multiple%20regression%20in,side%20we%20add%20our%20predictors>
